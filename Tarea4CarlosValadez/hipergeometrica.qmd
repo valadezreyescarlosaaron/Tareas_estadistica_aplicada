@@ -1,0 +1,369 @@
+---
+title: "Distribución Hipergeométrica"
+lang: es
+---
+
+```{=html}
+<style>
+main.content {
+text-align: justify}
+</style>
+```
+
+
+Desarrollar como en la demás distribuciones, incluyendo la función de probabilidad, gráficas considerando el cambio en los parámetros de la distribución. Características de la distribución (media y varianza). Un ejemplo con valores simulados y la verificación del teorema central del límite. Tomar como referencia principal el libro Introducción a la Probabilidad de Luis Rincón, páginas 243-247.
+
+
+
+Se tiene una caja con N objetos, K de tipo 1 y N − K de tipo 2. Se extrae una muestra de tamaño n sin reemplazo. X es el número de objetos de tipo 1 en la muestra:
+
+\begin{equation}
+f(x)=\frac{\binom{K}{x}\binom{N-K}{n-x}}{\binom{N}{n}}, \quad x=0,1,\dots,n
+\end{equation}
+
+\begin{equation}
+E(X)=n\frac{K}{N}, \qquad Var(X)=n,\frac{K}{N},\frac{N-K}{N},\frac{N-n}{N-1}
+\end{equation}
+
+```{r}
+#| label: hiper-setup
+library(ggplot2)
+
+# Funciones con la notación del libro: hipergeo(N, K, n)
+# R usa dhyper(x, K, N-K, n)
+dhiper <- function(x, N, K, n) dhyper(x, K, N - K, n)
+phiper <- function(x, N, K, n) phyper(x, K, N - K, n)
+rhiper <- function(k, N, K, n) rhyper(k, K, N - K, n)
+
+media_h <- function(N, K, n) n * K / N
+var_h   <- function(N, K, n) n * (K / N) * ((N - K) / N) * (N - n) / (N - 1)
+
+# Condición (3.5) del libro: n <= min(K, N - K)
+cumple_35 <- function(N, K, n) n <= min(K, N - K)
+
+# Data frame con f(x) y F(x) de un caso, soporte 0, 1, ..., n
+pmf_df <- function(N, K, n, etiqueta) {
+  stopifnot(cumple_35(N, K, n))
+  x <- 0:n
+  data.frame(x = x, prob = dhiper(x, N, K, n),
+             acum = phiper(x, N, K, n), Caso = etiqueta)
+}
+
+# Tema común para los gráficos
+tema <- theme_minimal() +
+  theme(plot.title = element_text(size = 15, face = "bold", hjust = 0.5),
+        plot.subtitle = element_text(size = 12, hjust = 0.5),
+        axis.title = element_text(face = "bold"),
+        strip.text = element_text(face = "bold"),
+        legend.position = "bottom")
+```
+
+1. Función de probabilidad (N = 20, K = 7, n = 5)
+
+```{r}
+#| label: hiper-fdp
+#| fig-width: 9
+#| fig-height: 5
+#| fig-align: "center"
+N <- 20; K <- 7; n <- 5
+cumple_35(N, K, n)               # TRUE: 5 <= min(7, 13)
+
+base <- pmf_df(N, K, n, "base")
+print(round(base[, c("x", "prob", "acum")], 7))
+
+# Valores que muestra el libro
+dhyper(3, 7, 13, 5)              # 0.1760836
+phyper(3, 7, 13, 5)              # 0.9692982
+
+ggplot(base, aes(x = x, y = prob)) +
+  geom_col(fill = "lightblue", color = "black", alpha = 0.8, width = 0.7) +
+  geom_point(color = "red", size = 2) +
+  scale_x_continuous(breaks = base$x) +
+  labs(title = "Función de probabilidad de X ~ hipergeo(20, 7, 5)",
+       x = "Número de objetos de tipo 1 en la muestra (x)", y = "f(x)") +
+  tema
+```
+
+Funcion de distribución
+
+```{r}
+#| label: hiper-fda
+#| fig-width: 9
+#| fig-height: 5
+#| fig-align: "center"
+ggplot(base, aes(x = x, y = acum)) +
+  geom_step(color = "steelblue", linewidth = 1) +
+  geom_point(color = "steelblue", size = 2) +
+  scale_x_continuous(breaks = base$x) +
+  labs(title = "Función de distribución de X ~ hipergeo(20, 7, 5)",
+       x = "x", y = "F(x)") +
+  tema
+```
+
+2. Gráficas al cambiar los parametros
+
+a) Variando K (N = 20, n = 5): más objetos de tipo 1 desplazan la distribución a la derecha.
+
+```{r}
+#| label: hiper-var-K
+#| fig-width: 10
+#| fig-height: 6
+Ks <- c(5, 7, 10, 15)                      # todos cumplen n <= min(K, N-K)
+dat_K <- do.call(rbind, lapply(Ks, function(k) pmf_df(20, k, 5, paste0("K = ", k))))
+dat_K$Caso <- factor(dat_K$Caso, levels = paste0("K = ", Ks))
+
+ggplot(dat_K, aes(x = x, y = prob)) +
+  geom_col(fill = "lightblue", color = "black", alpha = 0.8, width = 0.7) +
+  facet_wrap(~ Caso) +
+  labs(title = "Hipergeométrica: efecto de K (N = 20, n = 5)", x = "x", y = "f(x)") +
+  tema
+```
+
+b) Variando n (N = 20, K = 7): una muestra mayor desplaza la distribución a la derecha y la hace más dispersa.
+
+```{r}
+#| label: hiper-var-n
+#| fig-width: 10
+#| fig-height: 6
+ns <- c(1, 3, 5, 7)                        # n <= min(7, 13)
+dat_n <- do.call(rbind, lapply(ns, function(nn) pmf_df(20, 7, nn, paste0("n = ", nn))))
+dat_n$Caso <- factor(dat_n$Caso, levels = paste0("n = ", ns))
+
+ggplot(dat_n, aes(x = x, y = prob)) +
+  geom_col(fill = "lightgreen", color = "black", alpha = 0.8, width = 0.7) +
+  facet_wrap(~ Caso) +
+  labs(title = "Hipergeométrica: efecto de n (N = 20, K = 7)", x = "x", y = "f(x)") +
+  tema
+```
+
+Con n = 1 la distribución es una Bernoulli(p = K/N = 0.35)
+
+```{r}
+#| label: hiper-bernoulli
+# n = 1: hipergeo(N, K, 1) = Ber(K/N)
+rbind(hipergeo = dhiper(0:1, 20, 7, 1), Bernoulli = dbinom(0:1, 1, 7 / 20))
+```
+
+c) Variando N con K/N = 0.35 y n = 5 fijos : al crecer N la hipergeométrica converge a la binomial(5, 0.35).
+
+```{r}
+#| label: hiper-var-N
+#| fig-width: 10
+#| fig-height: 6
+Ns <- c(20, 60, 200, 1000)
+dat_N <- do.call(rbind, lapply(Ns, function(NN)
+  pmf_df(NN, 0.35 * NN, 5, paste0("N = ", NN, ", K = ", 0.35 * NN))))
+dat_N$Caso <- factor(dat_N$Caso, levels = unique(dat_N$Caso))
+bin <- data.frame(x = 0:5, prob = dbinom(0:5, 5, 0.35))
+
+ggplot(dat_N, aes(x = x, y = prob)) +
+  geom_col(fill = "lightblue", color = "black", alpha = 0.8, width = 0.7) +
+  geom_point(data = bin, aes(color = "Binomial(5, 0.35)"), size = 2) +
+  geom_line(data = bin, aes(color = "Binomial(5, 0.35)"), linewidth = 0.8) +
+  scale_color_manual(name = NULL, values = c("Binomial(5, 0.35)" = "red")) +
+  facet_wrap(~ Caso) +
+  labs(title = "Hipergeométrica: efecto de N (K/N = 0.35, n = 5)",
+       subtitle = "Convergencia a la binomial cuando N y K crecen con K/N fijo",
+       x = "x", y = "f(x)") +
+  tema
+
+# Máxima diferencia con la binomial para cada N
+sapply(Ns, function(NN) max(abs(dhiper(0:5, NN, 0.35 * NN, 5) - dbinom(0:5, 5, 0.35))))
+```
+
+3. Características: media y varianza
+
+```{r}
+#| label: hiper-caracteristicas
+x <- 0:n
+E_def <- sum(x * dhiper(x, N, K, n))
+V_def <- sum((x - E_def)^2 * dhiper(x, N, K, n))
+
+data.frame(
+  Medida     = c("Esperanza", "Varianza", "Desv. estándar"),
+  Formula    = round(c(media_h(N, K, n), var_h(N, K, n), sqrt(var_h(N, K, n))), 4),
+  Definicion = round(c(E_def, V_def, sqrt(V_def)), 4)
+)
+
+# Comparación con la binomial(n, K/N): misma media, menor varianza
+data.frame(
+  Distribucion = c("Hipergeométrica", "Binomial"),
+  Media    = c(media_h(N, K, n), n * K / N),
+  Varianza = round(c(var_h(N, K, n), n * (K / N) * (1 - K / N)), 4)
+)
+```
+
+Resultados: E(X) = 1.75 y Var(X) ≈ 0.8980 (σ ≈ 0.9476). La binomial(5, 0.35) tiene la misma media pero varianza 1.1375. El factor (N − n)/(N − 1) = 15/19 es la corrección por población finita.
+
+Moda y fórmula iterativa:
+
+```{r}
+#| label: hiper-moda
+# Fórmula iterativa: f(x+1) = (K-x)(n-x) / ((x+1)(N-K-n+x+1)) * f(x)
+f_iter <- numeric(n + 1)
+f_iter[1] <- dhiper(0, N, K, n)
+for (x in 0:(n - 1)) {
+  f_iter[x + 2] <- f_iter[x + 1] * (K - x) * (n - x) / ((x + 1) * (N - K - n + x + 1))
+}
+all.equal(f_iter, dhiper(0:n, N, K, n))
+
+# Moda: x* = ceiling((K*n - N + K + n - 1) / (N + 2)) si no es entero
+cota <- (K * n - N + K + n - 1) / (N + 2)
+c(cota = cota, moda_formula = ceiling(cota), moda_real = which.max(dhiper(0:n, N, K, n)) - 1)
+```
+
+4. Ejemplo con valores simulados
+
+```{r}
+#| label: hiper-simulacion-libro
+set.seed(123)
+rhyper(25, 7, 13, 5)     # 25 valores de hipergeo(20, 7, 5)
+```
+
+Ahora con 10,000 valores, comparando con los valores teóricos
+
+```{r}
+#| label: hiper-simulacion
+#| fig-width: 9
+#| fig-height: 5
+#| fig-align: "center"
+set.seed(123)
+Nsim <- 10000
+sim <- rhiper(Nsim, N, K, n)
+
+data.frame(
+  Medida   = c("Esperanza", "Varianza", "Desv. estándar"),
+  Teorico  = round(c(media_h(N, K, n), var_h(N, K, n), sqrt(var_h(N, K, n))), 4),
+  Simulado = round(c(mean(sim), var(sim), sd(sim)), 4)
+)
+
+comp <- data.frame(
+  x = x,
+  Teorica  = dhiper(x, N, K, n),
+  Simulada = as.numeric(table(factor(sim, levels = x))) / Nsim
+)
+print(round(comp, 4))
+
+ggplot(comp, aes(x = x)) +
+  geom_col(aes(y = Simulada, fill = "Simulada (10 000)"),
+           color = "black", alpha = 0.7, width = 0.7) +
+  geom_point(aes(y = Teorica, color = "Teórica"), size = 3) +
+  geom_line(aes(y = Teorica, color = "Teórica"), linewidth = 1) +
+  scale_fill_manual(name = NULL, values = c("Simulada (10 000)" = "lightblue")) +
+  scale_color_manual(name = NULL, values = c("Teórica" = "red")) +
+  scale_x_continuous(breaks = x) +
+  labs(title = "Simulación vs. hipergeo(20, 7, 5)", x = "x", y = "Probabilidad") +
+  tema
+```
+
+
+```{r}
+#| label: hiper-chisq
+# Chi-cuadrado agrupando la cola (x >= 4) para evitar frecuencias esperadas pequeñas
+obs <- c(sapply(0:3, function(v) sum(sim == v)), sum(sim >= 4))
+pt  <- c(dhiper(0:3, N, K, n), 1 - phiper(3, N, K, n))
+chisq.test(obs, p = pt)
+```
+
+Ejemplo aplicado (Ejercicio 344): lote de 100 artículos con 10 defectuosos, se extraen 5 y no se compra si hay 2 o más defectuosos. La probabilidad de comprar es P(X ≤ 1):
+
+```{r}
+#| label: hiper-ej344
+# N = 100, K = 10, n = 5
+p_compra <- phiper(1, 100, 10, 5)          # P(X <= 1)  ≈ 0.9231
+p_compra
+
+set.seed(123)
+mean(rhiper(10000, 100, 10, 5) <= 1)       # por simulación
+```
+
+5. Verificación del Teorema Central del Límite
+
+Se generan k = 1000 muestras de tamaño m = 50 de X ~ hipergeo(20, 7, 5) y se calcula la media de cada una:
+
+\begin{equation}
+\bar{X}_{50} \approx N\left(1.75,\ \frac{0.8980}{50}\right)
+\end{equation}
+
+```{r}
+#| label: hiper-tcl
+#| fig-width: 8
+#| fig-height: 6
+#| fig-align: "center"
+#| fig-cap: "Verificación del Teorema Central del Límite (Hipergeométrica)"
+set.seed(123)
+k <- 1000
+m <- 50
+
+mu     <- media_h(N, K, n)
+sigma2 <- var_h(N, K, n)
+sd_med <- sqrt(sigma2 / m)
+
+medias <- replicate(k, mean(rhiper(m, N, K, n)))
+
+ggplot(data.frame(Medias = medias), aes(x = Medias)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 30,
+                 fill = "lightblue", alpha = 0.7, color = "black") +
+  geom_density(aes(color = "Densidad estimada"), linewidth = 1) +
+  geom_function(fun = dnorm, args = list(mean = mu, sd = sd_med),
+                aes(color = "Normal teórica"), linewidth = 1, linetype = "dashed") +
+  geom_vline(xintercept = mean(medias), color = "blue",
+             linetype = "dotted", linewidth = 1) +
+  scale_color_manual(name = NULL,
+                     values = c("Densidad estimada" = "red",
+                                "Normal teórica" = "darkgreen")) +
+  labs(title = "Distribución de Medias Muestrales",
+       subtitle = paste("Muestras de tamaño", m, "de una hipergeo(20, 7, 5)"),
+       x = "Media muestral", y = "Densidad") +
+  tema
+```
+
+```{r}
+#| label: hiper-tcl-estadisticas
+z <- (medias - mean(medias)) / sd(medias)
+
+data.frame(
+  Medida    = c("Media", "Varianza", "Desv. estándar", "Sesgo", "Exceso de curtosis"),
+  Teorico   = c(mu, sigma2 / m, sd_med, 0, 0),
+  Observado = round(c(mean(medias), var(medias), sd(medias), mean(z^3), mean(z^4) - 3), 4)
+)
+
+shapiro.test(medias)
+suppressWarnings(ks.test(medias, "pnorm", mean = mu, sd = sd_med))
+```
+
+```{r}
+#| label: hiper-tcl-qq
+#| fig-width: 6
+#| fig-height: 5
+qqnorm(medias, main = "QQ-plot de las medias muestrales", pch = 20, col = "steelblue")
+qqline(medias, col = "red", lwd = 2)
+```
+
+Probabilidad exacta frente a la aproximación del TCL. La distribución exacta de la suma de m variables se obtiene por convolución de la función de probabilidad:
+
+```{r}
+#| label: hiper-tcl-exacta
+# Convolución de dos vectores de probabilidad
+conv <- function(a, b) {
+  r <- numeric(length(a) + length(b) - 1)
+  for (i in seq_along(a)) r[i:(i + length(b) - 1)] <- r[i:(i + length(b) - 1)] + a[i] * b
+  r
+}
+
+pmf <- dhiper(0:n, N, K, n)
+pmf_suma <- 1
+for (i in 1:m) pmf_suma <- conv(pmf_suma, pmf)   # posición j  <->  suma = j - 1
+
+# P(media <= 2)  <=>  P(suma <= 100)
+q <- 2
+exacta    <- sum(pmf_suma[1:(m * q + 1)])
+normal    <- pnorm(q, mu, sd_med)
+normal_cc <- pnorm((m * q + 0.5) / m, mu, sd_med)
+simulada  <- mean(medias <= q)
+
+data.frame(Metodo = c("Exacta (convolución)", "Normal (TCL)",
+                      "Normal con corrección", "Simulación"),
+           P_media_menor_igual_2 = round(c(exacta, normal, normal_cc, simulada), 4))
+```
+
